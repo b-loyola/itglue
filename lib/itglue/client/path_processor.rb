@@ -5,6 +5,10 @@ module ITGlue
         self.new(asset_type, options).path
       end
 
+      # @param asset_type [Symbol|String] the pluralized asset type name
+      # @param options [Hash] valid options:
+      #   parent [ITGlue::Asset] the parent instance
+      #   id [Integer] the asset id
       def initialize(asset_type, options = {})
         @asset_type = asset_type
         @options = options

@@ -1,8 +1,12 @@
 require 'active_support/core_ext/string/inflections'
+require 'itglue/asset/base/relatable'
+require 'itglue/asset/base/attributes'
 
 module ITGlue
   module Asset
     class Base
+      extend Relatable
+
       class << self
         # Override in subclasses if required
         def asset_type
@@ -10,14 +14,10 @@ module ITGlue
           self.name.demodulize.pluralize.underscore.to_sym
         end
 
-        def parent(parent_type)
-          @parent_type = parent_type
-        end
-
-        def nested_asset
-          @nested_asset = true
-        end
-
+        # Instantiates a record from data payload
+        # @param data [Hash] the data payload
+        #   E.g.: { id: 1, type: 'organizations', attributes: {name: 'Happy Frog', ...} }
+        # @return [ITGlue::Asset] the record instance
         def new_from_payload(data)
           raise_method_not_available(__method__, 'not available for Base') if self == Base
           asset = self.new(data[:attributes])
@@ -26,28 +26,43 @@ module ITGlue
           asset
         end
 
-        def get(options = {})
+        # Executes a get request through the top-level path
+        # E.g. GET '/configurations'
+        # @return [Array<ITGlue::Asset>] an array of asset instances
+        def get
           raise_method_not_available(__method__, 'is nested asset') if nested_asset?
-          assets = client.get(asset_type, {}, options)
+          assets = client.get(asset_type)
           assets.map { |data| self.new_from_payload(data) }
         end
 
-        def get_nested(parent, options = {})
+        # Executes a get request through the nested asset path
+        # E.g. GET 'organizations/:organization_id/relationships/configurations'
+        # @param parent [ITGlue::Asset] the parent asset
+        # @return [Array<ITGlue::Asset>] an array of asset instances
+        def get_nested(parent)
           raise_method_not_available(__method__, 'is top-level asset') unless parent_type
           path_options = { parent: parent }
-          assets = client.get(asset_type, path_options, options)
+          assets = client.get(asset_type, path_options)
           assets.map { |data| self.new_from_payload(data) }
         end
 
-        def find(id)
-          data = client.get(asset_type, id: id )
-          self.new_from_payload(data)
-        end
-
+        # Executes a get request through the top-level path, with a filter query
+        # E.g. GET '/configurations?filter[name]=HP-01'
+        # @param filter [Hash|String] the parameters to filter by
+        # @return [Array<ITGlue::Asset>] an array of asset instances
         def filter(filter)
           raise_method_not_available(__method__, 'is nested asset') if nested_asset?
           assets = client.get(asset_type, {}, { query: { filter: filter } })
           assets.map { |data| self.new_from_payload(data) }
+        end
+
+        # Executes a get request through the top-level path for a specific asset
+        # E.g. GET '/configurations/1'
+        # @param id [Integer] the id of the asset
+        # @return [ITGlue::Asset] the asset instance
+        def find(id)
+          data = client.get(asset_type, id: id )
+          self.new_from_payload(data)
         end
 
         def client
@@ -56,25 +71,17 @@ module ITGlue
 
         protected
 
-        def nested_asset?
-          !!@nested_asset
-        end
-
-        def parent_type
-          @parent_type
-        end
-
         def raise_method_not_available(method_name, reason)
           error_msg = "method '#{method_name}' is not available for #{asset_type}: #{reason}"
-          raise ITGlueMethodNotAvailable.new(error_msg)
+          raise MethodNotAvailable.new(error_msg)
         end
       end
 
-      attr_accessor :id, :type
+      attr_accessor :id, :type, :attributes
 
       def initialize(attributes = {})
+        raise ITGlueAssetError.new('cannot instantiate base') if self == Base
         @attributes = Attributes.new(attributes)
-        create_accessors(*@attributes.keys)
       end
 
       def asset_type
@@ -87,17 +94,17 @@ module ITGlue
         string << fields.join(", ") << ">"
       end
 
-      def attributes
-        @attributes.attributes
+      def dup
+        dup = self.class.new(self.attributes)
+        dup.type = self.type
+        dup
       end
 
-      def [](attribute)
-        @attributes[attribute]
-      end
-
-      def []=(attribute, value)
-        create_accessors(attribute)
-        self.send(attribute, value)
+      def assign_attributes(attributes)
+        raise ArgumentError.new('attributtes must be a Hash') unless attributes.is_a?(Hash)
+        attributes.each do |attribute, value|
+          @attributes[attribute] = value
+        end
       end
 
       def changed_attributes
@@ -120,15 +127,36 @@ module ITGlue
         !changed_attributes.empty?
       end
 
+      def [](attribute)
+        @attributes[attribute]
+      end
+
+      def []=(attribute, value)
+        @attributes.assign_attribute(attribute, value)
+      end
+
+      def method_missing(method, *args)
+        method_name = method.to_s
+        arg_count = args.length
+        if method_name.chomp!('=')
+          raise ArgumentError.new("wrong number of arguments (#{arg_count} for 1)") if arg_count != 1
+          @attributes.assign_attribute(method_name, args[0])
+        elsif arg_count == 0
+          @attributes[method]
+        else
+          super
+        end
+      end
+
       private
 
       def create
-        data = client.post(asset_type, payload)
+        data = self.class.client.post(asset_type, payload)
         reload_from_data(data)
       end
 
       def update
-        data = client.patch(asset_type, payload, id: id )
+        data = self.class.client.patch(asset_type, payload, id: id )
         reload_from_data(data)
       end
 
@@ -136,40 +164,16 @@ module ITGlue
         {
           data: {
             type: asset_type,
-            attributes: changed_attributes
+            attributes: attributes.attributes_hash
           }
         }
       end
 
       def reload_from_data(data)
         @attributes = Attributes.new(data[:attributes])
-        create_accessors(*@attributes.keys)
         self.type = data[:type]
         self.id = data[:id]
         self
-      end
-
-      def client
-        self.class.client
-      end
-
-      def create_accessors(*attribute_names)
-        attribute_names.each do |attribute_name|
-          create_attr_reader(attribute_name)
-          create_attr_writer(attribute_name)
-        end
-      end
-
-      def create_attr_reader(attribute_name)
-        define_singleton_method(attribute_name) do
-          @attributes[attribute_name]
-        end
-      end
-
-      def create_attr_writer(attribute_name)
-        define_singleton_method("#{attribute_name}=") do |value|
-          @attributes.assign_attribute(attribute_name, value)
-        end
       end
     end
   end

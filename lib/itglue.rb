@@ -1,5 +1,3 @@
-require 'active_support'
-
 module ITGlue
   class ITGlueError < StandardError; end
 
@@ -9,7 +7,7 @@ module ITGlue
     def config
       @config ||= Config.new
     end
-  
+
     def configure
       yield(config)
       config
@@ -19,7 +17,7 @@ module ITGlue
   class Config
     DEFAULT_PAGE_SIZE = 500
     attr_accessor :itglue_api_key, :itglue_api_base_uri, :logger, :default_page_size
-    
+
     def initialize
       @default_page_size = DEFAULT_PAGE_SIZE
     end

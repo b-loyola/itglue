@@ -1,15 +1,13 @@
 module ITGlue
   module Asset
     class Attributes < OpenStruct
-      TIMESTAMPS = [:created_at, :updated_at].freeze
-
       def initialize(*args)
         @changed_attribute_keys = []
         super
       end
 
       def assign_attribute(key, value)
-        @changed_attribute_keys << key
+        @changed_attribute_keys << key.to_sym
         self[key] = value
       end
 
@@ -22,11 +20,7 @@ module ITGlue
         self.to_h.keys
       end
 
-      def keys_to_be_updated
-        @changed_attribute_keys - TIMESTAMPS
-      end
-
-      def attributes
+      def attributes_hash
         self.to_h
       end
 
@@ -40,8 +34,8 @@ module ITGlue
       end
 
       def changes
-        attributes_hash = attributes
-        keys_to_be_updated.each_with_object({}) do |key, changes|
+        attributes_hash = self.attributes_hash
+        @changed_attribute_keys.each_with_object({}) do |key, changes|
           changes[key] = attributes_hash[key]
         end
       end

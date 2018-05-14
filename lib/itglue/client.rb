@@ -24,7 +24,7 @@ module ITGlue
       process_request(http_method, path, payload, options)
     end
 
-    def get(asset_type, path_options = {} ,options = {})
+    def get(asset_type, path_options = {}, options = {})
       response = process_request(:get, process_path(asset_type, path_options), nil, options)
       data = get_remaining_data(response, options)
       prepare_data(data)
@@ -46,10 +46,9 @@ module ITGlue
       return response['data'] unless response['data'].is_a?(Array)
       data = response['data']
       loop do
-        return data if response['meta'] && response['meta']['next-page'].nil?
+        break if response['meta'] && response['meta']['next-page'].nil?
         response = process_request(:get, response['links']['next'], nil, options)
         data += response['data']
-        break if response['meta'] && response['meta']['next-page'].nil?
       end
       data
     end
@@ -77,27 +76,27 @@ module ITGlue
 
     def process_options(options, payload)
       options.merge!(body: payload.to_json) if payload
-      if options[:headers]
-        unless options[:headers].is_a?(Hash)
-          raise ClientError.new('header option must be a Hash')
-        end
-        options[:headers] = default_headers.merge(options[:headers])
-      else
-        options[:headers] = default_headers
-      end
-      if options[:query]
-        if options[:query][:page]
-          unless options[:query][:page].is_a?(Hash)
-            raise ClientError.new('page option must be a Hash')
-          end
-          options[:query][:page][:size] ||= @default_page_size
-        else
-          options[:query][:page] = { size: @default_page_size }
-        end
-      else
-        options[:query] = { page: { size: @default_page_size } }
-      end
+      options[:headers] = process_header_options(options[:headers])
+      options[:query] = process_query_options(options[:query])
       options
+    end
+
+    def process_header_options(header_options)
+      return default_headers unless header_options
+      raise ClientError.new('header option must be a Hash') unless header_options.is_a?(Hash)
+      default_headers.merge(header_options)
+    end
+
+    def process_query_options(query_options)
+      return { page: { size: @default_page_size } } unless query_options
+      raise ClientError.new('query option must be a Hash') unless query_options.is_a?(Hash)
+      if query_options[:page]
+        raise ClientError.new('query page option must be a Hash') unless query_options[:page].is_a?(Hash)
+        query_options[:page][:size] ||= @default_page_size
+      else
+        query_options[:page] = { size: @default_page_size }
+      end
+      query_options
     end
 
     def handle_response_errors(response)
