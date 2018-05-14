@@ -24,7 +24,8 @@ For now this gem only supports API Key authentication.
 require 'itglue'
 
 ITGlue.configure do |config|
-  config.itglue_api_key = 'ITG.b94e901420fe7cb163a364b451f172d9.P3nMIV9EDp1Xb7h4-sO7WDU0S2R5DgC-fu2DsTxBkW7eZHRp0y4ODRQ51se1c24m' config.itglue_api_base_uri = 'https://api.itglue.com'
+  config.itglue_api_key = 'ITG.b94e901420fe7cb163a364b451f172d9...'
+  config.itglue_api_base_uri = 'https://api.itglue.com'
   config.logger = ::Logger.new(STDOUT)
 end
 ```
@@ -46,11 +47,12 @@ organizations = ITGlue::Organization.filter(name: 'Happy Frog')
 Get organization by id
 ```ruby
 organization = ITGlue::Organization.find(123)
-#=> #<ITGlue::Organization id: 123 name: "Ben's Gem Test", description: nil, ...>]
+#=> #<ITGlue::Organization id: 123 name: "Happy Frog", description: nil, ...>]
 ```
 Get configurations for a specific organization
 ```ruby
-configuration = ITGlue::Organization.get_nested(organization)
+configurations = ITGlue::Configuration.get_nested(organization)
+#=> [#<ITGlue::Configuration id: 23943 organization_id: 31131, organization_name: "Happy Frog", name: "HP", ...>, ...]
 ```
 
 ### Client
@@ -59,6 +61,7 @@ You can also directly instantiate a client and handle the data and response dire
 ```ruby
 client = ITGlue::Client.new
 #=> #<ITGlue::Client:0x007fd7eb032d00 ...>
+
 query = { filter: { name: 'HP' } }
 client.get(:configurations, { parent: organization }, { query: query })
 # => [
@@ -66,6 +69,7 @@ client.get(:configurations, { parent: organization }, { query: query })
 #     id: 456,
 #     type: "configurations",
 #     attributes: {
+#       name: "HP",
 #       organization_id: 123,
 #       organization_name: "Happy Frog",
 #       ...
@@ -76,15 +80,16 @@ client.get(:configurations, { parent: organization }, { query: query })
 ```
 A get request such as the one above will handle generating the route and pagination. If you want to handle these yourself, you can use 'execute'
 ```ruby
-client.execute(:get, '/organizations/31131/relationships/configurations', nil, {query: {filter: {name: 'HP'}}})
+client.execute(:get, '/organizations/31131/relationships/configurations', nil, { query: query })
 # => {
 #   "data"=> [
 #     {
 #       "id"=>"23943",
 #       "type"=>"configurations",
 #       "attributes"=> {
-#         "organization-id"=>31131,
-#         "organization-name"=>"Ben's Gem Test",
+#         "name" => "HP",
+#         "organization-id"=>123,
+#         "organization-name"=>"Happy Frog",
 #         ...
 #       }
 #     },

@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = %q{A simple wrapper for the IT Glue API}
   spec.description   = %q{This gem provides a client for interactiong with the IT Glue API}
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
+  spec.homepage      = "https://github.com/b-loyola/itglue"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files -z`.split("\x0").reject do |f|
@@ -25,6 +25,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec", "~> 3.0"
 
-  spec.add_dependency "httparty", ">= 0.15.7"
-  spec.add_dependency "activesupport", ">= 3.0.0"
+  spec.add_dependency "httparty", "~> 0.16", ">= 0.15.7"
+  spec.add_dependency "activesupport", "~> 5.2", ">= 3.0.0"
 end
